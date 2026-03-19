@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Production Log</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3e;
+      --text: #e8eaf0;
+      --muted: #6b7280;
+      --accent: #4f8ef7;
+      --green: #22c55e;
+      --red: #ef4444;
+      --amber: #f59e0b;
+      --radius: 8px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .brand svg { color: var(--accent); }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: var(--surface);
+      transition: all 0.2s;
+    }
+
+    .status-pill.active {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .dot.pulse {
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* ── Main layout ── */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 24px;
+      max-width: 860px;
+      width: 100%;
+      margin: 0 auto;
+      gap: 20px;
+    }
+
+    /* ── Stats bar ── */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+    }
+
+    .stat-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 1.45rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+    }
+
+    #elapsed { color: var(--accent); }
+
+    /* ── Control buttons ── */
+    .controls {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 20px;
+      border-radius: var(--radius);
+      border: none;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      outline: none;
+    }
+
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+    .btn-start { background: var(--green); color: #fff; }
+    .btn-log   { background: var(--accent); color: #fff; flex: 1; justify-content: center; font-size: 0.92rem; }
+    .btn-stop  { background: var(--red);   color: #fff; }
+
+    /* ── Log table ── */
+    .log-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .log-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .log-body {
+      overflow-y: auto;
+      flex: 1;
+      max-height: 400px;
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 48px 24px;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .empty-state svg { opacity: 0.3; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #20233a;
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.025); }
+
+    .td-idx  { width: 48px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .td-time { width: 130px; font-variant-numeric: tabular-nums; color: var(--accent); white-space: nowrap; }
+    .td-elapsed { width: 80px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .td-note { word-break: break-word; }
+
+    /* ── Modal ── */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 24px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s;
+    }
+
+    .modal-backdrop.open {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      width: 100%;
+      max-width: 460px;
+      transform: translateY(12px);
+      transition: transform 0.18s;
+    }
+
+    .modal-backdrop.open .modal { transform: translateY(0); }
+
+    .modal h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .modal p {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.9rem;
+      padding: 10px 12px;
+      resize: vertical;
+      min-height: 90px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    textarea:focus { border-color: var(--accent); }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .btn-cancel {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 8px 16px;
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .btn-cancel:hover { border-color: var(--text); color: var(--text); }
+
+    .btn-save {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 8px 20px;
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-save:hover { opacity: 0.88; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 14px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #22303c;
+      border: 1px solid #2d8a5e;
+      color: var(--green);
+      padding: 10px 20px;
+      border-radius: 999px;
+      font-size: 0.83rem;
+      font-weight: 500;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 200;
+      white-space: nowrap;
+    }
+
+    .toast.show { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="brand">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+    </svg>
+    Production Log
+  </div>
+  <div class="status-pill" id="statusPill">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">Ready</span>
+  </div>
+</header>
+
+<!-- Main -->
+<main>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-label">Elapsed</div>
+      <div class="stat-value" id="elapsed">00:00:00</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Entries</div>
+      <div class="stat-value" id="entryCount">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Session started</div>
+      <div class="stat-value" id="sessionStart" style="font-size:0.95rem;padding-top:4px;color:var(--muted)">—</div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn btn-start" id="btnStart" onclick="startSession()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Start
+    </button>
+    <button class="btn btn-log" id="btnLog" onclick="openModal()" disabled>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      Log Entry
+    </button>
+    <button class="btn btn-stop" id="btnStop" onclick="stopSession()" disabled>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+      Stop &amp; Export
+    </button>
+  </div>
+
+  <!-- Log table -->
+  <div class="log-section">
+    <div class="log-header">
+      <span>Log Entries</span>
+      <span id="csvLabel" style="display:none;color:var(--accent);cursor:pointer;font-size:0.78rem" onclick="stopSession()">Export CSV</span>
+    </div>
+    <div class="log-body" id="logBody">
+      <div class="empty-state" id="emptyState">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+        Press <strong style="color:var(--text);margin:0 4px">Start</strong> to begin logging
+      </div>
+      <table id="logTable" style="display:none">
+        <thead>
+          <tr>
+            <th class="td-idx">#</th>
+            <th class="td-time">Timestamp</th>
+            <th class="td-elapsed">Elapsed</th>
+            <th class="td-note">Note</th>
+          </tr>
+        </thead>
+        <tbody id="logTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<!-- Footer -->
+<footer>Production Log &mdash; session data stays in-browser, CSV exports locally</footer>
+
+<!-- Modal -->
+<div class="modal-backdrop" id="modalBackdrop" onclick="handleBackdropClick(event)">
+  <div class="modal">
+    <h2>Add Log Entry</h2>
+    <p id="modalTimestamp"></p>
+    <textarea id="noteInput" placeholder="Describe what happened…" maxlength="1000"></textarea>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveEntry()">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  let sessionStart = null;
+  let timerInterval = null;
+  let entries = [];
+
+  // ── Session control ────────────────────────────────────────────────────────
+  function startSession() {
+    sessionStart = new Date();
+    entries = [];
+    renderTable();
+
+    document.getElementById('sessionStart').textContent = fmt(sessionStart, true);
+    document.getElementById('entryCount').textContent = '0';
+    setElapsed();
+
+    timerInterval = setInterval(setElapsed, 1000);
+
+    setStatus(true);
+    document.getElementById('btnStart').disabled = true;
+    document.getElementById('btnLog').disabled   = false;
+    document.getElementById('btnStop').disabled  = false;
+    document.getElementById('csvLabel').style.display = 'inline';
+
+    showToast('Session started');
+  }
+
+  function stopSession() {
+    if (!sessionStart) return;
+
+    clearInterval(timerInterval);
+    setStatus(false);
+
+    document.getElementById('btnStart').disabled = false;
+    document.getElementById('btnLog').disabled   = true;
+    document.getElementById('btnStop').disabled  = true;
+
+    exportCSV();
+  }
+
+  // ── Timer ──────────────────────────────────────────────────────────────────
+  function setElapsed() {
+    const diff = Date.now() - sessionStart.getTime();
+    document.getElementById('elapsed').textContent = formatDuration(diff);
+  }
+
+  function formatDuration(ms) {
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sc = s % 60;
+    return [h, m, sc].map(n => String(n).padStart(2, '0')).join(':');
+  }
+
+  function elapsedSinceStart(date) {
+    return formatDuration(date - sessionStart);
+  }
+
+  // ── Status pill ────────────────────────────────────────────────────────────
+  function setStatus(active) {
+    const pill = document.getElementById('statusPill');
+    const dot  = document.getElementById('statusDot');
+    const txt  = document.getElementById('statusText');
+    pill.classList.toggle('active', active);
+    dot.classList.toggle('pulse', active);
+    txt.textContent = active ? 'Recording' : 'Stopped';
+  }
+
+  // ── Modal ──────────────────────────────────────────────────────────────────
+  function openModal() {
+    const now = new Date();
+    document.getElementById('modalTimestamp').textContent =
+      fmt(now, false) + '  ·  +' + elapsedSinceStart(now);
+    document.getElementById('noteInput').value = '';
+    document.getElementById('modalBackdrop').classList.add('open');
+    setTimeout(() => document.getElementById('noteInput').focus(), 180);
+  }
+
+  function closeModal() {
+    document.getElementById('modalBackdrop').classList.remove('open');
+  }
+
+  function handleBackdropClick(e) {
+    if (e.target === document.getElementById('modalBackdrop')) closeModal();
+  }
+
+  document.getElementById('noteInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEntry();
+    if (e.key === 'Escape') closeModal();
+  });
+
+  function saveEntry() {
+    const note = document.getElementById('noteInput').value.trim();
+    if (!note) {
+      document.getElementById('noteInput').focus();
+      return;
+    }
+    const ts = new Date();
+    entries.push({ ts, note });
+    closeModal();
+    renderTable();
+    document.getElementById('entryCount').textContent = entries.length;
+    showToast('Entry saved');
+  }
+
+  // ── Table ──────────────────────────────────────────────────────────────────
+  function renderTable() {
+    const empty = document.getElementById('emptyState');
+    const table = document.getElementById('logTable');
+    const tbody = document.getElementById('logTbody');
+
+    if (entries.length === 0) {
+      empty.style.display = 'flex';
+      table.style.display = 'none';
+      return;
+    }
+
+    empty.style.display = 'none';
+    table.style.display = 'table';
+    tbody.innerHTML = '';
+
+    entries.forEach((e, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="td-idx">${i + 1}</td>
+        <td class="td-time">${fmt(e.ts, false)}</td>
+        <td class="td-elapsed">+${elapsedSinceStart(e.ts)}</td>
+        <td class="td-note">${escapeHtml(e.note)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // Scroll to bottom
+    const body = document.getElementById('logBody');
+    body.scrollTop = body.scrollHeight;
+  }
+
+  // ── CSV export ─────────────────────────────────────────────────────────────
+  function exportCSV() {
+    const rows = [
+      ['#', 'Timestamp', 'Elapsed', 'Note'],
+      ...entries.map((e, i) => [
+        i + 1,
+        fmt(e.ts, false),
+        '+' + elapsedSinceStart(e.ts),
+        e.note
+      ])
+    ];
+
+    // Add session metadata at top
+    const meta = [
+      ['Session Start', fmt(sessionStart, false), '', ''],
+      ['Session End',   fmt(new Date(), false), '', ''],
+      ['Total Entries', entries.length, '', ''],
+      ['', '', '', ''],
+    ];
+
+    const csv = [...meta, ...rows]
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\r\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `production-log_${dateSlug(sessionStart)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    showToast(`CSV exported — ${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}`);
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function fmt(date, dateOnly) {
+    const pad = n => String(n).padStart(2, '0');
+    const d = `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
+    if (dateOnly) return d;
+    const t = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    return `${d} ${t}`;
+  }
+
+  function dateSlug(date) {
+    return fmt(date, true) + '_' + date.toTimeString().slice(0,8).replace(/:/g, '-');
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+              .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+  }
+
+  let toastTimer;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+  }
+</script>
+</body>
+</html>
