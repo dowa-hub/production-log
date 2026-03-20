@@ -100,7 +100,7 @@
     /* ── Stats bar ── */
     .stats {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 12px;
     }
 
@@ -388,6 +388,10 @@
       <div class="stat-label">Session started</div>
       <div class="stat-value" id="sessionStart" style="font-size:0.95rem;padding-top:4px;color:var(--muted)">—</div>
     </div>
+    <div class="stat-card">
+      <div class="stat-label">Last entry</div>
+      <div class="stat-value" id="lastEntry" style="font-size:0.95rem;padding-top:4px;color:var(--muted)">—</div>
+    </div>
   </div>
 
   <!-- Controls -->
@@ -562,6 +566,7 @@
     closeModal();
     renderTable();
     document.getElementById('entryCount').textContent = entries.length;
+    document.getElementById('lastEntry').textContent = fmt(ts, false).split(' ')[1];
     showToast('Entry saved');
   }
 
